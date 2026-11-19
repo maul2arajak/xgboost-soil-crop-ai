@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Simulator Real-Time AI XGBoost - Riset Kadar Tanah & Tanaman</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .tree-node { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); }
+    .tree-edge { transition: stroke 0.25s ease, stroke-width 0.25s ease; }
+    input[type="range"] { accent-color: #059669; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- HEADER -->
+  <header class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-30 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-extrabold text-lg">
+          XG
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base sm:text-lg font-bold text-white tracking-tight">XGBoost Soil-to-Crop AI Inspector</h1>
+            <span class="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">REAL-TIME ENGINE</span>
+          </div>
+          <p class="text-xs text-slate-400">Simulasi Interaktif Pohon Keputusan XGBoost, Rasio Agronomi NPK &amp; SHAP (2.200 Sampel Kaggle)</p>
+        </div>
+      </div>
+
+      <!-- TAB NAVIGATION -->
+      <nav class="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700/70">
+        <button id="tabBtnSim" onclick="switchTab('sim')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-emerald-600 text-white shadow">
+          1. Simulator AI Real-Time
+        </button>
+        <button id="tabBtnAblation" onclick="switchTab('ablation')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-300 hover:text-white">
+          2. Hasil Ablation &amp; Model
+        </button>
+        <button id="tabBtnDataset" onclick="switchTab('dataset')" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-300 hover:text-white">
+          3. Profil 22 Tanaman
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <main class="max-w-7xl mx-auto w-full px-4 py-5 flex-1">
+
+    <!-- ========================================== -->
+    <!-- TAB 1: SIMULATOR AI REAL-TIME              -->
+    <!-- ========================================== -->
+    <section id="viewSim" class="space-y-5">
+
+      <!-- TOP BAR: SCENARIO MODE & PRESET SELECTOR -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
+        <div class="space-y-1.5">
+          <div class="text-xs font-semibold uppercase tracking-wider text-slate-400">Mode Skenario Fitur (Ablation Switch Real-Time)</div>
+          <div class="flex flex-wrap gap-2">
+            <button id="modeBtn1" onclick="setScenarioMode(1)" class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500">
+              Skenario 1: Tanah Murni (N, P, K, pH) <span class="ml-1 text-amber-400">F1: 78,50%</span>
+            </button>
+            <button id="modeBtn2" onclick="setScenarioMode(2)" class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500">
+              Skenario 2: Tanah + Rasio NPK <span class="ml-1 text-sky-400">F1: 78,56%</span>
+            </button>
+            <button id="modeBtn3" onclick="setScenarioMode(3)" class="px-3 py-1.5 rounded-xl text-xs font-semibold border transition bg-emerald-600/20 border-emerald-500 text-emerald-300 shadow">
+              Skenario 3: Lengkap (Tanah + Rasio + Iklim) <span class="ml-1 text-emerald-300 font-bold">F1: 98,63%</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2.5 border-t lg:border-t-0 pt-3 lg:pt-0 border-slate-800">
+          <div class="flex flex-col">
+            <label for="presetCropSelect" class="text-[11px] text-slate-400 font-medium mb-1">Uji Sampel Asli Tanaman (22 Kelas):</label>
+            <div class="flex items-center gap-2">
+              <select id="presetCropSelect" onchange="applyCropPreset(this.value, false)" class="bg-slate-800 border border-slate-700 text-white text-xs rounded-xl px-3 py-2 focus:outline-none focus:border-emerald-500">
+              </select>
+              <button id="btnRandomSample" onclick="sampleRandomFromSelectedCrop()" class="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition shadow flex items-center gap-1.5">
+                <span>Acak Sampel</span>
+              </button>
+              <button id="btnAutoStream" onclick="toggleLiveSensorStream()" class="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5">
+                <span id="streamDot" class="w-2 h-2 rounded-full bg-slate-400"></span>
+                <span id="streamLabel">Simulasi Sensor Live</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MAIN 3-COLUMN GRID -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+
+        <!-- LEFT COLUMN: SLIDERS & ENGINEERED FEATURES (4 COLS) -->
+        <div class="lg:col-span-4 space-y-4">
+
+          <!-- Soil Chemical Sliders -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3.5">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div>
+                <h2 class="text-sm font-bold text-white">1. Input Sensor Kadar Tanah</h2>
+                <p class="text-[11px] text-slate-400">Geser untuk melihat perubahan keputusan pohon AI</p>
+              </div>
+              <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">KIMIA TANAH</span>
+            </div>
+
+            <!-- N -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-medium text-slate-300">Nitrogen (N)</span>
+                <span class="font-bold text-emerald-400"><span id="valN">80</span> mg/kg</span>
+              </div>
+              <input id="sliderN" type="range" min="0" max="140" step="1" value="80" oninput="onSliderChange()" class="w-full h-2 bg-slate-800 rounded-lg cursor-pointer" />
+              <div class="flex justify-between text-[10px] text-slate-500 mt-0.5"><span>0 (Rendah)</span><span>70 (Sedang)</span><span>140 (Tinggi)</span></div>
+            </div>
+
+            <!-- P -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-medium text-slate-300">Fosfor (P)</span>
+                <span class="font-bold text-emerald-400"><span id="valP">48</span> mg/kg</span>
+              </div>
+              <input id="sliderP" type="range" min="5" max="145" step="1" value="48" oninput="onSliderChange()" class="w-full h-2 bg-slate-800 rounded-lg cursor-pointer" />
+              <div class="flex justify-between text-[10px] text-slate-500 mt-0.5"><span>5</span><span>75</span><span>145</span></div>
+            </div>
+
+            <!-- K -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-medium text-slate-300">Kalium (K)</span>
+                <span class="font-bold text-emerald-400"><span id="valK">40</span> mg/kg</span>
+              </div>
+              <input id="sliderK" type="range" min="5" max="205" step="1" value="40" oninput="onSliderChange()" class="w-full h-2 bg-slate-800 rounded-lg cursor-pointer" />
+              <div class="flex justify-between text-[10px] text-slate-500 mt-0.5"><span>5</span><span>100</span><span>205</span></div>
+            </div>
+
+            <!-- pH -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-medium text-slate-300">Keasaman Tanah (pH)</span>
+                <span class="font-bold text-amber-400"><span id="valPh">6.43</span> <span id="badgePh" class="ml-1 px-1.5 py-0.2 text-[10px] rounded bg-slate-800 text-slate-300">Netral</span></span>
+              </div>
+              <input id="sliderPh" type="range" min="3.5" max="9.9" step="0.05" value="6.43" oninput="onSliderChange()" class="w-full h-2 bg-slate-800 rounded-lg cursor-pointer" />
+              <div class="flex justify-between text-[10px] text-slate-500 mt-0.5"><span>3.5 (Asam)</span><span>6.5 (Netral)</span><span>9.9 (Basa)</span></div>
+            </div>
+          </div>
+
+          <!-- Climate Sliders -->
+          <div id="climatePanel" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3.5 transition">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div>
+                <h2 class="text-sm font-bold text-white">2. Parameter Agroklimat</h2>
+                <p id="climateStatusNote" class="text-[11px] text-emerald-400">Aktif di Skenario 3 (menaikkan F1 +20,07%)</p>
+              </div>
+              <span class="px-2 py-0.5 text-[10px] font-bold rounded bg-sky-500/15 text-sky-400 border border-sky-500/30">LINGKUNGAN</span>
+            </div>
+
+            <!-- Temperature -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-medium text-slate-300">Suhu Udara (Temperature)</span>
+                <span class="font-bold text-sky-400"><span id="valTemp">23.7</span> °C</span>
+              </div>
+              <input id="sliderTemp" type="range" min="8.8" max="43.7" step="0.2" value="23.7" oninput="onSliderChange()" class="w-full h-2 bg-slate-800 rounded-lg cursor-pointer" />
+            </div>
+
+            <!-- Humidity -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-medium text-slate-300">Kelembapan (Humidity)</span>
+                <span class="font-bold text-sky-400"><span id="valHum">82.3</span> %</span>
+              </div>
+              <input id="sliderHum" type="range" min="14.0" max="100.0" step="0.5" value="82.3" oninput="onSliderChange()" class="w-full h-2 bg-slate-800 rounded-lg cursor-pointer" />
+            </div>
+
+            <!-- Rainfall -->
+            <div>
+              <div class="flex justify-between text-xs mb-1">
+                <span class="font-medium text-slate-300">Curah Hujan (Rainfall)</span>
+                <span class="font-bold text-sky-400"><span id="valRain">236.2</span> mm</span>
+              </div>
+              <input id="sliderRain" type="range" min="20.0" max="299.0" step="1.0" value="236.2" oninput="onSliderChange()" class="w-full h-2 bg-slate-800 rounded-lg cursor-pointer" />
+            </div>
+          </div>
+
+          <!-- Engineered Features Live Computation Box -->
+          <div id="engineeredPanel" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-indigo-300">3. Kalkulasi Otomatis Fitur Rasio Agronomi</h3>
+              <span id="engBadge" class="text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold">Aktif</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="bg-slate-800/70 p-2 rounded-xl border border-slate-700/60">
+                <div class="text-[10px] text-slate-400">Total_NPK (N+P+K)</div>
+                <div id="feTotalNPK" class="font-bold text-white text-sm">168.0 mg/kg</div>
+              </div>
+              <div class="bg-slate-800/70 p-2 rounded-xl border border-slate-700/60">
+                <div class="text-[10px] text-slate-400">Rasio N / P</div>
+                <div id="feNtoP" class="font-bold text-indigo-300 text-sm">1.67</div>
+              </div>
+              <div class="bg-slate-800/70 p-2 rounded-xl border border-slate-700/60">
+                <div class="text-[10px] text-slate-400">Rasio N / K</div>
+                <div id="feNtoK" class="font-bold text-indigo-300 text-sm">2.00</div>
+              </div>
+              <div class="bg-slate-800/70 p-2 rounded-xl border border-slate-700/60">
+                <div class="text-[10px] text-slate-400">Rasio P / K</div>
+                <div id="fePtoK" class="font-bold text-indigo-300 text-sm">1.20</div>
+              </div>
+              <div class="bg-slate-800/70 p-2 rounded-xl border border-slate-700/60">
+                <div class="text-[10px] text-slate-400">Proporsi N : P : K</div>
+                <div id="feShares" class="font-bold text-emerald-300 text-xs">48% : 29% : 24%</div>
+              </div>
+              <div class="bg-slate-800/70 p-2 rounded-xl border border-slate-700/60">
+                <div class="text-[10px] text-slate-400">|pH - 6.5| Deviasi</div>
+                <div id="fePhDev" class="font-bold text-amber-300 text-sm">0.07</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- CENTER/RIGHT COLUMN: AI ENGINE VISUALIZATION (8 COLS) -->
+        <div class="lg:col-span-8 space-y-4">
+
+          <!-- TOP PREDICTION BANNER & SOFTMAX PROBABILITIES -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+              <!-- Primary Predicted Crop Card -->
+              <div class="md:col-span-5 bg-gradient-to-br from-emerald-950/90 via-slate-900 to-slate-900 border border-emerald-500/40 rounded-2xl p-4 flex flex-col justify-between">
+                <div class="flex items-center justify-between">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-400">Keputusan Utama XGBoost</span>
+                  <span id="predConfidenceBadge" class="px-2 py-0.5 text-xs font-extrabold rounded-lg bg-emerald-500 text-slate-950">96.4%</span>
+                </div>
+                <div class="my-3 flex items-center gap-3">
+                  <div id="predIcon" class="w-14 h-14 rounded-2xl bg-emerald-500/20 border border-emerald-400/40 flex items-center justify-center text-3xl">
+                    🌾
+                  </div>
+                  <div>
+                    <div id="predCropName" class="text-2xl font-extrabold text-white capitalize">Rice (Padi)</div>
+                    <div id="predLogitInfo" class="text-xs text-slate-400">Skor Log-Odds Margin: <span class="text-emerald-300 font-mono font-semibold">+4.82</span></div>
+                  </div>
+                </div>
+                <div id="predAgronomyReason" class="text-xs text-slate-300 bg-slate-950/70 border border-slate-800 rounded-xl p-2.5 leading-relaxed">
+                  Nitrogen tinggi (80 mg/kg) + curah hujan tinggi (236 mm) memisahkan Padi dari Jute.
+                </div>
+              </div>
+
+              <!-- Top 5 Softmax Probability Distribution -->
+              <div class="md:col-span-7 space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Distribusi Probabilitas Softmax (`multi:softprob` Top-5 Kelas)</h3>
+                  <span class="text-[11px] text-slate-400 font-mono">P(y=c|x) = exp(z_c) / Σ exp(z_j)</span>
+                </div>
+                <div id="top5BarsContainer" class="space-y-2">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- LIVE XGBOOST DECISION TREE ENSEMBLE VISUALIZER -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                  <span>Cara Kerja Internal Pohon Keputusan XGBoost (Live Decision Path)</span>
+                </h3>
+                <p class="text-xs text-slate-400">Garis hijau terang menunjukkan jalur cabang (*split node*) yang ditempuh data tanahmu saat ini di dalam *Gradient Boosted Trees*</p>
+              </div>
+              <span class="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-mono text-emerald-300">
+                f(x) = Base_Score + Σ η · Tree_k(x)
+              </span>
+            </div>
+
+            <!-- Interactive SVG Decision Trees -->
+            <div class="bg-slate-950 border border-slate-800/90 rounded-xl p-3 overflow-x-auto">
+              <svg id="xgbTreeSvg" viewBox="0 0 820 270" class="w-full h-auto min-w-[640px]"></svg>
+            </div>
+
+            <!-- Step-by-step Additive Boosting Logit Table -->
+            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5 pt-1 text-xs">
+              <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5">
+                <div class="text-[10px] text-slate-400 font-semibold">1. Pohon #1 (Makronutrisi NPK)</div>
+                <div id="tree1Rule" class="font-mono text-emerald-400 text-xs mt-0.5">N ≥ 60 &amp; K &lt; 100</div>
+                <div id="tree1Delta" class="text-[11px] text-slate-300 mt-1">Kontribusi Logit: <span class="font-bold text-white">+1.85</span></div>
+              </div>
+              <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5">
+                <div class="text-[10px] text-slate-400 font-semibold">2. Pohon #2 (pH &amp; Rasio N/P)</div>
+                <div id="tree2Rule" class="font-mono text-indigo-300 text-xs mt-0.5">5.5 ≤ pH ≤ 7.2 &amp; N/P &gt; 1.2</div>
+                <div id="tree2Delta" class="text-[11px] text-slate-300 mt-1">Kontribusi Logit: <span class="font-bold text-white">+1.24</span></div>
+              </div>
+              <div class="bg-slate-950/90 border border-slate-800 rounded-xl p-2.5">
+                <div class="text-[10px] text-slate-400 font-semibold">3. Pohon #3 (Pemisah Agroklimat)</div>
+                <div id="tree3Rule" class="font-mono text-sky-400 text-xs mt-0.5">Rainfall &gt; 190 mm</div>
+                <div id="tree3Delta" class="text-[11px] text-slate-300 mt-1">Kontribusi Logit: <span class="font-bold text-white">+2.10</span></div>
+              </div>
+              <div class="bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-2.5">
+                <div class="text-[10px] text-emerald-300 font-semibold">4. Total Margin → Softmax</div>
+                <div id="treeTotalMargin" class="font-mono text-white font-bold text-xs mt-0.5">z = +5.19 → P = 96.4%</div>
+                <div id="treeRunnerUpNote" class="text-[11px] text-slate-400 mt-1">Kandidat #2: Jute (2.8%)</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- REAL-TIME LOCAL SHAP EXPLAINABILITY WATERFALL -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 class="text-sm font-bold text-white">Analisis SHAP Real-Time (Kontribusi Tiap Parameter terhadap Tanaman Terpilih)</h3>
+                <p class="text-xs text-slate-400">Bar hijau (<span class="text-emerald-400 font-semibold">+SHAP</span>) mendorong AI memilih <span id="shapTargetCropLabel" class="font-bold text-white capitalize">Rice</span>; bar merah (<span class="text-rose-400 font-semibold">-SHAP</span>) mengurangi kecocokan karena menyimpang dari kadar ideal tanaman tersebut</p>
+              </div>
+              <span class="text-[11px] font-mono text-slate-400">SHAP TreeExplainer Attribution</span>
+            </div>
+
+            <div id="shapWaterfallContainer" class="space-y-2 pt-1">
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: HASIL ABLATION & KOMPARASI MODEL    -->
+    <!-- ========================================== -->
+    <section id="viewAblation" class="hidden space-y-5">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="text-base font-bold text-white">Hasil Eksperimen Nyata dari Eksekusi Skrip Risetmu (5-Fold Stratified CV)</h2>
+            <p class="text-xs text-slate-400">Data metrik di bawah ini adalah hasil validasi silang pada 2.200 sampel `Crop_recommendation.csv`</p>
+          </div>
+          <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Terverifikasi dari Terminal VS Code</span>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <!-- Ablation Table -->
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-sm font-bold text-emerald-400">Tabel 1: Ablation Study Skenario Fitur Tanah vs Agroklimat</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-800 text-slate-400">
+                    <th class="py-2 pr-2">Skenario Fitur</th>
+                    <th class="py-2 px-2 text-center">Jml Fitur</th>
+                    <th class="py-2 px-2 text-right">Mean Macro F1</th>
+                    <th class="py-2 pl-2 text-right">Std Dev</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/70">
+                  <tr>
+                    <td class="py-2.5 pr-2 font-medium text-slate-200">Skenario 1: Kadar Tanah Murni (`N, P, K, ph`)</td>
+                    <td class="py-2.5 px-2 text-center">4</td>
+                    <td class="py-2.5 px-2 text-right font-mono text-amber-400 font-bold">0.7850 (78,50%)</td>
+                    <td class="py-2.5 pl-2 text-right font-mono text-slate-400">±0.0057</td>
+                  </tr>
+                  <tr>
+                    <td class="py-2.5 pr-2 font-medium text-slate-200">Skenario 2: Kadar Tanah + Rasio Agronomi NPK</td>
+                    <td class="py-2.5 px-2 text-center">12</td>
+                    <td class="py-2.5 px-2 text-right font-mono text-sky-400 font-bold">0.7856 (78,56%)</td>
+                    <td class="py-2.5 pl-2 text-right font-mono text-slate-400">±0.0125</td>
+                  </tr>
+                  <tr class="bg-emerald-950/30">
+                    <td class="py-2.5 pr-2 font-bold text-emerald-300">Skenario 3: Kadar Tanah + Rasio + Agroklimat</td>
+                    <td class="py-2.5 px-2 text-center font-bold text-emerald-300">15</td>
+                    <td class="py-2.5 px-2 text-right font-mono text-emerald-400 font-extrabold">0.9863 (98,63%)</td>
+                    <td class="py-2.5 pl-2 text-right font-mono text-emerald-300">±0.0064</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              <strong>Temuan Riset:</strong> Mengandalkan unsur kimia tanah saja menghasilkan F1-Score <strong>78,50%</strong> karena komoditas seperti <em>Padi (Rice)</em> dan <em>Rami (Jute)</em> memiliki profil NPK dan pH yang tumpang-tindih. Penambahan fitur agroklimat mendongkrak F1-Score sebesar <strong>+20,07%</strong> menjadi <strong>98,63%</strong>.
+            </p>
+          </div>
+
+          <!-- Model Comparison Table -->
+          <div class="bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-3">
+            <h3 class="text-sm font-bold text-indigo-400">Tabel 2: Komparasi Algoritma Klasifikasi pada Data Uji (20% Stratified)</h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-800 text-slate-400">
+                    <th class="py-2 pr-2">Model Algoritma</th>
+                    <th class="py-2 px-2 text-right">Test Accuracy</th>
+                    <th class="py-2 pl-2 text-right">Macro F1-Score</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800/70">
+                  <tr>
+                    <td class="py-2.5 pr-2 font-medium text-slate-200">Decision Tree (Baseline)</td>
+                    <td class="py-2.5 px-2 text-right font-mono text-slate-300">0.9750 (97,50%)</td>
+                    <td class="py-2.5 pl-2 text-right font-mono text-slate-300">0.9749</td>
+                  </tr>
+                  <tr>
+                    <td class="py-2.5 pr-2 font-medium text-slate-200">XGBoost (Default Hyperparameter)</td>
+                    <td class="py-2.5 px-2 text-right font-mono text-sky-400 font-bold">0.9773 (97,73%)</td>
+                    <td class="py-2.5 pl-2 text-right font-mono text-sky-400 font-bold">0.9771</td>
+                  </tr>
+                  <tr class="bg-indigo-950/30">
+                    <td class="py-2.5 pr-2 font-bold text-indigo-300">XGBoost (Tuned RandomizedSearchCV)</td>
+                    <td class="py-2.5 px-2 text-right font-mono text-indigo-300 font-extrabold">0.9909 (99,09%)</td>
+                    <td class="py-2.5 pl-2 text-right font-mono text-indigo-300 font-extrabold">0.9909</td>
+                  </tr>
+                  <tr class="bg-emerald-950/30">
+                    <td class="py-2.5 pr-2 font-bold text-emerald-300">Random Forest (200 Trees Ensemble)</td>
+                    <td class="py-2.5 px-2 text-right font-mono text-emerald-400 font-extrabold">0.9932 (99,32%)</td>
+                    <td class="py-2.5 pl-2 text-right font-mono text-emerald-400 font-extrabold">0.9932</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              <strong>Temuan Riset:</strong> Optimasi hyperparameter XGBoost (`subsample`, `colsample_bytree`, `max_depth`, dan regularisasi L1/L2) meningkatkan akurasi XGBoost dari <strong>97,73%</strong> menjadi <strong>99,09%</strong>, bersaing ketat dengan Random Forest (<strong>99,32%</strong>).
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: PROFIL 22 TANAMAN                   -->
+    <!-- ========================================== -->
+    <section id="viewDataset" class="hidden space-y-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-bold text-white">Profil Statistik Kadar Tanah 22 Komoditas Tanaman (2.200 Sampel)</h2>
+            <p class="text-xs text-slate-400">Klik tombol <strong>"Muat ke Simulator"</strong> pada baris tanaman mana pun untuk langsung menguji profil tanah tersebut di simulator AI</p>
+          </div>
+          <input id="searchCropInput" type="text" oninput="renderDatasetTable()" placeholder="Cari nama tanaman (mis. rice, coffee, apple)..." class="bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 w-full sm:w-64" />
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400">
+                <th class="py-2.5 px-2">Komoditas Tanaman</th>
+                <th class="py-2.5 px-2 text-right">N (mg/kg)</th>
+                <th class="py-2.5 px-2 text-right">P (mg/kg)</th>
+                <th class="py-2.5 px-2 text-right">K (mg/kg)</th>
+                <th class="py-2.5 px-2 text-right">pH Tanah</th>
+                <th class="py-2.5 px-2 text-right">Suhu (°C)</th>
+                <th class="py-2.5 px-2 text-right">Kelembapan (%)</th>
+                <th class="py-2.5 px-2 text-right">Hujan (mm)</th>
+                <th class="py-2.5 px-2 text-center">Aksi Simulasi</th>
+              </tr>
+            </thead>
+            <tbody id="datasetTableBody" class="divide-y divide-slate-800/60">
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // =========================================================================
+    // GROUNDED STATISTICAL PROFILES FROM USER'S Crop_recommendation.csv (2,200 ROWS)
+    // =========================================================================
+    const CROP_STATS = {
+      "apple": {"idName": "Apel", "icon": "🍎", "N": {"mean": 20.8, "std": 11.86, "min": 0.0, "max": 40.0}, "P": {"mean": 134.22, "std": 8.14, "min": 120.0, "max": 145.0}, "K": {"mean": 199.89, "std": 3.32, "min": 195.0, "max": 205.0}, "ph": {"mean": 5.93, "std": 0.27, "min": 5.51, "max": 6.5}, "temperature": {"mean": 22.63, "std": 0.83, "min": 21.04, "max": 24.0}, "humidity": {"mean": 92.33, "std": 1.46, "min": 90.03, "max": 94.92}, "rainfall": {"mean": 112.65, "std": 7.1, "min": 100.12, "max": 124.98}},
+      "banana": {"idName": "Pisang", "icon": "🍌", "N": {"mean": 100.23, "std": 11.11, "min": 80.0, "max": 120.0}, "P": {"mean": 82.01, "std": 7.69, "min": 70.0, "max": 95.0}, "K": {"mean": 50.05, "std": 3.38, "min": 45.0, "max": 55.0}, "ph": {"mean": 5.98, "std": 0.27, "min": 5.51, "max": 6.49}, "temperature": {"mean": 27.38, "std": 1.43, "min": 25.01, "max": 29.91}, "humidity": {"mean": 80.36, "std": 2.81, "min": 75.03, "max": 84.98}, "rainfall": {"mean": 104.63, "std": 9.4, "min": 90.11, "max": 119.85}},
+      "blackgram": {"idName": "Kacang Hitam", "icon": "🫘", "N": {"mean": 40.02, "std": 12.66, "min": 20.0, "max": 60.0}, "P": {"mean": 67.47, "std": 7.15, "min": 55.0, "max": 80.0}, "K": {"mean": 19.24, "std": 3.19, "min": 15.0, "max": 25.0}, "ph": {"mean": 7.13, "std": 0.37, "min": 6.5, "max": 7.78}, "temperature": {"mean": 29.97, "std": 2.69, "min": 25.1, "max": 34.95}, "humidity": {"mean": 65.12, "std": 2.8, "min": 60.07, "max": 69.96}, "rainfall": {"mean": 67.88, "std": 4.18, "min": 60.42, "max": 74.92}},
+      "chickpea": {"idName": "Kacang Arab", "icon": "🧆", "N": {"mean": 40.09, "std": 12.15, "min": 20.0, "max": 60.0}, "P": {"mean": 67.79, "std": 7.5, "min": 55.0, "max": 80.0}, "K": {"mean": 79.92, "std": 3.26, "min": 75.0, "max": 85.0}, "ph": {"mean": 7.34, "std": 0.8, "min": 5.99, "max": 8.87}, "temperature": {"mean": 18.87, "std": 1.17, "min": 17.02, "max": 21.0}, "humidity": {"mean": 16.86, "std": 1.71, "min": 14.26, "max": 19.97}, "rainfall": {"mean": 80.06, "std": 7.94, "min": 65.11, "max": 94.78}},
+      "coconut": {"idName": "Kelapa", "icon": "🥥", "N": {"mean": 21.98, "std": 11.76, "min": 0.0, "max": 40.0}, "P": {"mean": 16.93, "std": 8.36, "min": 5.0, "max": 30.0}, "K": {"mean": 30.59, "std": 3.0, "min": 25.0, "max": 35.0}, "ph": {"mean": 5.98, "std": 0.29, "min": 5.5, "max": 6.47}, "temperature": {"mean": 27.41, "std": 1.39, "min": 25.01, "max": 29.87}, "humidity": {"mean": 94.84, "std": 2.69, "min": 90.02, "max": 99.98}, "rainfall": {"mean": 175.69, "std": 29.47, "min": 131.09, "max": 225.63}},
+      "coffee": {"idName": "Kopi", "icon": "☕", "N": {"mean": 101.2, "std": 12.35, "min": 80.0, "max": 120.0}, "P": {"mean": 28.74, "std": 7.28, "min": 15.0, "max": 40.0}, "K": {"mean": 29.94, "std": 3.25, "min": 25.0, "max": 35.0}, "ph": {"mean": 6.79, "std": 0.42, "min": 6.02, "max": 7.49}, "temperature": {"mean": 25.54, "std": 1.5, "min": 23.06, "max": 27.92}, "humidity": {"mean": 58.87, "std": 5.84, "min": 50.05, "max": 69.95}, "rainfall": {"mean": 158.07, "std": 25.7, "min": 115.16, "max": 199.47}},
+      "cotton": {"idName": "Kapas", "icon": "☁️", "N": {"mean": 117.77, "std": 11.63, "min": 100.0, "max": 140.0}, "P": {"mean": 46.24, "std": 7.35, "min": 35.0, "max": 60.0}, "K": {"mean": 19.56, "std": 3.17, "min": 15.0, "max": 25.0}, "ph": {"mean": 6.91, "std": 0.63, "min": 5.8, "max": 7.99}, "temperature": {"mean": 23.99, "std": 1.14, "min": 22.0, "max": 25.99}, "humidity": {"mean": 79.84, "std": 3.05, "min": 75.01, "max": 84.88}, "rainfall": {"mean": 80.4, "std": 11.23, "min": 60.65, "max": 99.93}},
+      "grapes": {"idName": "Anggur", "icon": "🍇", "N": {"mean": 23.18, "std": 12.47, "min": 0.0, "max": 40.0}, "P": {"mean": 132.53, "std": 7.62, "min": 120.0, "max": 145.0}, "K": {"mean": 200.11, "std": 3.27, "min": 195.0, "max": 205.0}, "ph": {"mean": 6.03, "std": 0.3, "min": 5.51, "max": 6.5}, "temperature": {"mean": 23.85, "std": 9.74, "min": 8.83, "max": 41.95}, "humidity": {"mean": 81.88, "std": 1.18, "min": 80.02, "max": 83.98}, "rainfall": {"mean": 69.61, "std": 2.95, "min": 65.01, "max": 74.92}},
+      "jute": {"idName": "Rami (Jute)", "icon": "🌿", "N": {"mean": 78.4, "std": 10.97, "min": 60.0, "max": 100.0}, "P": {"mean": 46.86, "std": 7.2, "min": 35.0, "max": 60.0}, "K": {"mean": 39.99, "std": 3.31, "min": 35.0, "max": 45.0}, "ph": {"mean": 6.73, "std": 0.45, "min": 6.0, "max": 7.49}, "temperature": {"mean": 24.96, "std": 1.19, "min": 23.09, "max": 26.99}, "humidity": {"mean": 79.64, "std": 5.51, "min": 70.88, "max": 89.89}, "rainfall": {"mean": 174.79, "std": 15.08, "min": 150.24, "max": 199.84}},
+      "kidneybeans": {"idName": "Kacang Merah", "icon": "🫘", "N": {"mean": 20.75, "std": 10.83, "min": 0.0, "max": 40.0}, "P": {"mean": 67.54, "std": 7.57, "min": 55.0, "max": 80.0}, "K": {"mean": 20.05, "std": 3.1, "min": 15.0, "max": 25.0}, "ph": {"mean": 5.75, "std": 0.15, "min": 5.5, "max": 6.0}, "temperature": {"mean": 20.12, "std": 2.6, "min": 15.33, "max": 24.92}, "humidity": {"mean": 21.61, "std": 2.17, "min": 18.09, "max": 24.97}, "rainfall": {"mean": 105.92, "std": 26.11, "min": 60.28, "max": 149.74}},
+      "lentil": {"idName": "Lentil", "icon": "🥣", "N": {"mean": 18.77, "std": 12.2, "min": 0.0, "max": 40.0}, "P": {"mean": 68.36, "std": 7.34, "min": 55.0, "max": 80.0}, "K": {"mean": 19.41, "std": 2.97, "min": 15.0, "max": 25.0}, "ph": {"mean": 6.93, "std": 0.55, "min": 5.92, "max": 7.84}, "temperature": {"mean": 24.51, "std": 3.32, "min": 18.06, "max": 29.94}, "humidity": {"mean": 64.8, "std": 2.94, "min": 60.09, "max": 69.92}, "rainfall": {"mean": 45.68, "std": 5.63, "min": 35.03, "max": 54.94}},
+      "maize": {"idName": "Jagung", "icon": "🌽", "N": {"mean": 77.76, "std": 11.95, "min": 60.0, "max": 100.0}, "P": {"mean": 48.44, "std": 8.01, "min": 35.0, "max": 60.0}, "K": {"mean": 19.79, "std": 2.94, "min": 15.0, "max": 25.0}, "ph": {"mean": 6.25, "std": 0.41, "min": 5.51, "max": 7.0}, "temperature": {"mean": 22.39, "std": 2.68, "min": 18.04, "max": 26.55}, "humidity": {"mean": 65.09, "std": 5.45, "min": 55.28, "max": 74.83}, "rainfall": {"mean": 84.77, "std": 15.55, "min": 60.65, "max": 109.75}},
+      "mango": {"idName": "Mangga", "icon": "🥭", "N": {"mean": 20.07, "std": 12.33, "min": 0.0, "max": 40.0}, "P": {"mean": 27.18, "std": 7.66, "min": 15.0, "max": 40.0}, "K": {"mean": 29.92, "std": 3.1, "min": 25.0, "max": 35.0}, "ph": {"mean": 5.77, "std": 0.7, "min": 4.51, "max": 6.97}, "temperature": {"mean": 31.21, "std": 2.65, "min": 27.0, "max": 35.99}, "humidity": {"mean": 50.16, "std": 2.76, "min": 45.02, "max": 54.96}, "rainfall": {"mean": 94.7, "std": 3.34, "min": 89.29, "max": 100.81}},
+      "mothbeans": {"idName": "Kacang Ngengat", "icon": "🌱", "N": {"mean": 21.44, "std": 11.34, "min": 0.0, "max": 40.0}, "P": {"mean": 48.01, "std": 7.55, "min": 35.0, "max": 60.0}, "K": {"mean": 20.23, "std": 3.05, "min": 15.0, "max": 25.0}, "ph": {"mean": 6.83, "std": 1.86, "min": 3.5, "max": 9.94}, "temperature": {"mean": 28.19, "std": 2.21, "min": 24.02, "max": 32.0}, "humidity": {"mean": 53.16, "std": 6.99, "min": 40.01, "max": 64.96}, "rainfall": {"mean": 51.2, "std": 13.75, "min": 30.92, "max": 74.44}},
+      "mungbean": {"idName": "Kacang Hijau", "icon": "🫛", "N": {"mean": 20.99, "std": 11.51, "min": 0.0, "max": 40.0}, "P": {"mean": 47.28, "std": 7.87, "min": 35.0, "max": 60.0}, "K": {"mean": 19.87, "std": 3.15, "min": 15.0, "max": 25.0}, "ph": {"mean": 6.72, "std": 0.29, "min": 6.22, "max": 7.2}, "temperature": {"mean": 28.53, "std": 0.84, "min": 27.01, "max": 29.91}, "humidity": {"mean": 85.5, "std": 2.85, "min": 80.03, "max": 90.0}, "rainfall": {"mean": 48.4, "std": 7.12, "min": 36.12, "max": 59.87}},
+      "muskmelon": {"idName": "Blewah / Melon", "icon": "🍈", "N": {"mean": 100.32, "std": 12.18, "min": 80.0, "max": 120.0}, "P": {"mean": 17.72, "std": 7.19, "min": 5.0, "max": 30.0}, "K": {"mean": 50.08, "std": 3.22, "min": 45.0, "max": 55.0}, "ph": {"mean": 6.36, "std": 0.23, "min": 6.0, "max": 6.78}, "temperature": {"mean": 28.66, "std": 0.86, "min": 27.02, "max": 29.94}, "humidity": {"mean": 92.34, "std": 1.51, "min": 90.02, "max": 94.96}, "rainfall": {"mean": 24.69, "std": 2.77, "min": 20.21, "max": 29.87}},
+      "orange": {"idName": "Jeruk", "icon": "🍊", "N": {"mean": 19.58, "std": 11.94, "min": 0.0, "max": 40.0}, "P": {"mean": 16.55, "std": 7.69, "min": 5.0, "max": 30.0}, "K": {"mean": 10.01, "std": 3.06, "min": 5.0, "max": 15.0}, "ph": {"mean": 7.02, "std": 0.58, "min": 6.01, "max": 8.0}, "temperature": {"mean": 22.77, "std": 7.34, "min": 10.01, "max": 34.91}, "humidity": {"mean": 92.17, "std": 1.43, "min": 90.01, "max": 94.96}, "rainfall": {"mean": 110.47, "std": 5.72, "min": 100.17, "max": 119.69}},
+      "papaya": {"idName": "Pepaya", "icon": "🥭", "N": {"mean": 49.88, "std": 12.22, "min": 31.0, "max": 70.0}, "P": {"mean": 59.05, "std": 7.06, "min": 46.0, "max": 70.0}, "K": {"mean": 50.04, "std": 3.1, "min": 45.0, "max": 55.0}, "ph": {"mean": 6.74, "std": 0.15, "min": 6.5, "max": 6.99}, "temperature": {"mean": 33.72, "std": 6.26, "min": 23.01, "max": 43.68}, "humidity": {"mean": 92.4, "std": 1.42, "min": 90.04, "max": 94.94}, "rainfall": {"mean": 142.63, "std": 64.4, "min": 40.35, "max": 248.86}},
+      "pigeonpeas": {"idName": "Kacang Gude", "icon": "🌿", "N": {"mean": 20.73, "std": 11.85, "min": 0.0, "max": 40.0}, "P": {"mean": 67.73, "std": 7.29, "min": 55.0, "max": 80.0}, "K": {"mean": 20.29, "std": 2.82, "min": 15.0, "max": 25.0}, "ph": {"mean": 5.79, "std": 0.83, "min": 4.55, "max": 7.45}, "temperature": {"mean": 27.74, "std": 5.72, "min": 18.32, "max": 36.98}, "humidity": {"mean": 48.06, "std": 10.96, "min": 30.4, "max": 69.69}, "rainfall": {"mean": 149.46, "std": 32.99, "min": 90.05, "max": 198.83}},
+      "pomegranate": {"idName": "Delima", "icon": "🍎", "N": {"mean": 18.87, "std": 12.62, "min": 0.0, "max": 40.0}, "P": {"mean": 18.75, "std": 7.39, "min": 5.0, "max": 30.0}, "K": {"mean": 40.21, "std": 3.03, "min": 35.0, "max": 45.0}, "ph": {"mean": 6.43, "std": 0.49, "min": 5.56, "max": 7.2}, "temperature": {"mean": 21.84, "std": 2.21, "min": 18.07, "max": 24.96}, "humidity": {"mean": 90.13, "std": 2.83, "min": 85.13, "max": 95.0}, "rainfall": {"mean": 107.53, "std": 2.9, "min": 102.52, "max": 112.48}},
+      "rice": {"idName": "Padi", "icon": "🌾", "N": {"mean": 79.89, "std": 11.92, "min": 60.0, "max": 99.0}, "P": {"mean": 47.58, "std": 7.9, "min": 35.0, "max": 60.0}, "K": {"mean": 39.87, "std": 2.95, "min": 35.0, "max": 45.0}, "ph": {"mean": 6.43, "std": 0.77, "min": 5.01, "max": 7.87}, "temperature": {"mean": 23.69, "std": 2.03, "min": 20.05, "max": 26.93}, "humidity": {"mean": 82.27, "std": 1.42, "min": 80.12, "max": 84.97}, "rainfall": {"mean": 236.18, "std": 34.29, "min": 182.56, "max": 298.56}},
+      "watermelon": {"idName": "Semangka", "icon": "🍉", "N": {"mean": 99.42, "std": 12.57, "min": 80.0, "max": 120.0}, "P": {"mean": 17.0, "std": 7.54, "min": 5.0, "max": 30.0}, "K": {"mean": 50.22, "std": 3.26, "min": 45.0, "max": 55.0}, "ph": {"mean": 6.5, "std": 0.28, "min": 6.0, "max": 6.96}, "temperature": {"mean": 25.59, "std": 0.85, "min": 24.04, "max": 26.99}, "humidity": {"mean": 85.16, "std": 2.96, "min": 80.03, "max": 89.98}, "rainfall": {"mean": 50.79, "std": 5.87, "min": 40.13, "max": 59.76}}
+    };
+
+    const CROP_KEYS = Object.keys(CROP_STATS).sort();
+
+    let state = {
+      scenarioMode: 3, // 1: Soil Only, 2: Soil + Ratios, 3: Full (Soil + Ratios + Climate)
+      N: 80,
+      P: 48,
+      K: 40,
+      ph: 6.43,
+      temperature: 23.7,
+      humidity: 82.3,
+      rainfall: 236.2,
+      selectedPreset: "rice",
+      liveStreamTimer: null
+    };
+
+    // =========================================================================
+    // INITIALIZATION
+    // =========================================================================
+    window.addEventListener("DOMContentLoaded", () => {
+      populatePresetDropdown();
+      renderDatasetTable();
+      applyCropPreset("rice", false);
+    });
+
+    function populatePresetDropdown() {
+      const sel = document.getElementById("presetCropSelect");
+      sel.innerHTML = CROP_KEYS.map(k => {
+        const c = CROP_STATS[k];
+        return `<option value="${k}" ${k === "rice" ? "selected" : ""}>${c.icon} ${k.toUpperCase()} (${c.idName})</option>`;
+      }).join("");
+    }
+
+    function switchTab(tab) {
+      const views = { sim: "viewSim", ablation: "viewAblation", dataset: "viewDataset" };
+      const btns = { sim: "tabBtnSim", ablation: "tabBtnAblation", dataset: "tabBtnDataset" };
+      Object.keys(views).forEach(k => {
+        const v = document.getElementById(views[k]);
+        const b = document.getElementById(btns[k]);
+        if (k === tab) {
+          v.classList.remove("hidden");
+          b.className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition bg-emerald-600 text-white shadow";
+        } else {
+          v.classList.add("hidden");
+          b.className = "px-3 py-1.5 rounded-lg text-xs font-semibold transition text-slate-300 hover:text-white";
+        }
+      });
+    }
+
+    function setScenarioMode(mode) {
+      state.scenarioMode = mode;
+      const b1 = document.getElementById("modeBtn1");
+      const b2 = document.getElementById("modeBtn2");
+      const b3 = document.getElementById("modeBtn3");
+      const inactiveClass = "px-3 py-1.5 rounded-xl text-xs font-semibold border transition bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500";
+      const activeClass = "px-3 py-1.5 rounded-xl text-xs font-semibold border transition bg-emerald-600/20 border-emerald-500 text-emerald-300 shadow";
+
+      b1.className = mode === 1 ? activeClass : inactiveClass;
+      b2.className = mode === 2 ? activeClass : inactiveClass;
+      b3.className = mode === 3 ? activeClass : inactiveClass;
+
+      const climatePanel = document.getElementById("climatePanel");
+      const climateNote = document.getElementById("climateStatusNote");
+      const engBadge = document.getElementById("engBadge");
+
+      if (mode === 1) {
+        climatePanel.classList.add("opacity-45");
+        climateNote.textContent = "Nonaktif di Skenario 1 (Hanya N, P, K, pH yang dipakai AI)";
+        climateNote.className = "text-[11px] text-amber-400";
+        engBadge.textContent = "Nonaktif (Skenario 1)";
+        engBadge.className = "text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-semibold";
+      } else if (mode === 2) {
+        climatePanel.classList.add("opacity-45");
+        climateNote.textContent = "Nonaktif di Skenario 2 (Hanya Tanah + Rasio NPK)";
+        climateNote.className = "text-[11px] text-amber-400";
+        engBadge.textContent = "Aktif (Skenario 2)";
+        engBadge.className = "text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold";
+      } else {
+        climatePanel.classList.remove("opacity-45");
+        climateNote.textContent = "Aktif di Skenario 3 (menaikkan F1 +20,07%)";
+        climateNote.className = "text-[11px] text-emerald-400";
+        engBadge.textContent = "Aktif (Skenario 3)";
+        engBadge.className = "text-[10px] px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 font-semibold";
+      }
+
+      runLiveXGBoostSimulation();
+    }
+
+    function applyCropPreset(cropKey, randomize) {
+      if (!CROP_STATS[cropKey]) return;
+      state.selectedPreset = cropKey;
+      document.getElementById("presetCropSelect").value = cropKey;
+      const c = CROP_STATS[cropKey];
+
+      function pickVal(stat, decimals) {
+        if (!randomize) return stat.mean;
+        const u = (Math.random() - 0.5) * 1.6 * stat.std;
+        const raw = Math.min(stat.max, Math.max(stat.min, stat.mean + u));
+        return Number(raw.toFixed(decimals));
+      }
+
+      state.N = Math.round(pickVal(c.N, 0));
+      state.P = Math.round(pickVal(c.P, 0));
+      state.K = Math.round(pickVal(c.K, 0));
+      state.ph = pickVal(c.ph, 2);
+      state.temperature = pickVal(c.temperature, 1);
+      state.humidity = pickVal(c.humidity, 1);
+      state.rainfall = pickVal(c.rainfall, 1);
+
+      syncSlidersFromState();
+      runLiveXGBoostSimulation();
+    }
+
+    function sampleRandomFromSelectedCrop() {
+      const sel = document.getElementById("presetCropSelect").value || "rice";
+      applyCropPreset(sel, true);
+    }
+
+    function loadCropFromTable(cropKey) {
+      switchTab("sim");
+      applyCropPreset(cropKey, false);
+    }
+
+    function toggleLiveSensorStream() {
+      const dot = document.getElementById("streamDot");
+      const label = document.getElementById("streamLabel");
+      const btn = document.getElementById("btnAutoStream");
+
+      if (state.liveStreamTimer) {
+        clearInterval(state.liveStreamTimer);
+        state.liveStreamTimer = null;
+        dot.className = "w-2 h-2 rounded-full bg-slate-400";
+        label.textContent = "Simulasi Sensor Live";
+        btn.className = "px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs font-semibold transition flex items-center gap-1.5";
+        return;
+      }
+
+      dot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-ping";
+      label.textContent = "Stop Sensor Live";
+      btn.className = "px-3 py-2 rounded-xl bg-emerald-950 border border-emerald-500 text-emerald-300 text-xs font-semibold transition flex items-center gap-1.5";
+
+      let idx = CROP_KEYS.indexOf(state.selectedPreset);
+      state.liveStreamTimer = setInterval(() => {
+        idx = (idx + 1) % CROP_KEYS.length;
+        applyCropPreset(CROP_KEYS[idx], true);
+      }, 2200);
+    }
+
+    function syncSlidersFromState() {
+      document.getElementById("sliderN").value = state.N;
+      document.getElementById("sliderP").value = state.P;
+      document.getElementById("sliderK").value = state.K;
+      document.getElementById("sliderPh").value = state.ph;
+      document.getElementById("sliderTemp").value = state.temperature;
+      document.getElementById("sliderHum").value = state.humidity;
+      document.getElementById("sliderRain").value = state.rainfall;
+    }
+
+    function onSliderChange() {
+      state.N = Number(document.getElementById("sliderN").value);
+      state.P = Number(document.getElementById("sliderP").value);
+      state.K = Number(document.getElementById("sliderK").value);
+      state.ph = Number(document.getElementById("sliderPh").value);
+      state.temperature = Number(document.getElementById("sliderTemp").value);
+      state.humidity = Number(document.getElementById("sliderHum").value);
+      state.rainfall = Number(document.getElementById("sliderRain").value);
+
+      runLiveXGBoostSimulation();
+    }
+
+    // =========================================================================
+    // CORE XGBOOST ADDITIVE TREE LOG-ODDS & SHAP ATTRIBUTION ENGINE
+    // =========================================================================
+    function runLiveXGBoostSimulation() {
+      // Update slider readouts
+      document.getElementById("valN").textContent = state.N;
+      document.getElementById("valP").textContent = state.P;
+      document.getElementById("valK").textContent = state.K;
+      document.getElementById("valPh").textContent = state.ph.toFixed(2);
+      document.getElementById("valTemp").textContent = state.temperature.toFixed(1);
+      document.getElementById("valHum").textContent = state.humidity.toFixed(1);
+      document.getElementById("valRain").textContent = state.rainfall.toFixed(1);
+
+      const badgePh = document.getElementById("badgePh");
+      if (state.ph < 5.8) {
+        badgePh.textContent = "Asam";
+        badgePh.className = "ml-1 px-1.5 py-0.2 text-[10px] rounded bg-rose-500/20 text-rose-300";
+      } else if (state.ph > 7.2) {
+        badgePh.textContent = "Basa";
+        badgePh.className = "ml-1 px-1.5 py-0.2 text-[10px] rounded bg-sky-500/20 text-sky-300";
+      } else {
+        badgePh.textContent = "Netral Ideal";
+        badgePh.className = "ml-1 px-1.5 py-0.2 text-[10px] rounded bg-emerald-500/20 text-emerald-300";
+      }
+
+      // Compute Agronomic Engineered Features
+      const eps = 1e-5;
+      const totalNPK = state.N + state.P + state.K;
+      const nToP = state.N / (state.P + eps);
+      const nToK = state.N / (state.K + eps);
+      const pToK = state.P / (state.K + eps);
+      const nShare = Math.round((state.N / (totalNPK + eps)) * 100);
+      const pShare = Math.round((state.P / (totalNPK + eps)) * 100);
+      const kShare = Math.max(0, 100 - nShare - pShare);
+      const phDev = Math.abs(state.ph - 6.5);
+
+      document.getElementById("feTotalNPK").textContent = `${totalNPK} mg/kg`;
+      document.getElementById("feNtoP").textContent = nToP.toFixed(2);
+      document.getElementById("feNtoK").textContent = nToK.toFixed(2);
+      document.getElementById("fePtoK").textContent = pToK.toFixed(2);
+      document.getElementById("feShares").textContent = `${nShare}% : ${pShare}% : ${kShare}%`;
+      document.getElementById("fePhDev").textContent = phDev.toFixed(2);
+
+      // Compute Additive Tree Margins & Per-Feature Local SHAP Contributions for all 22 crops
+      const activeFeatures = ["N", "P", "K", "ph"];
+      if (state.scenarioMode === 3) {
+        activeFeatures.push("temperature", "humidity", "rainfall");
+      }
+
+      const cropScores = [];
+      CROP_KEYS.forEach(cropKey => {
+        const c = CROP_STATS[cropKey];
+        let tree1Margin = 0; // NPK primary splits
+        let tree2Margin = 0; // pH & NPK ratio splits
+        let tree3Margin = 0; // Agroclimate splits
+        const featureShap = {};
+
+        // Evaluate axis-aligned tree partition similarity (Gaussian-like tree leaf log-odds)
+        ["N", "P", "K", "ph", "temperature", "humidity", "rainfall"].forEach(feat => {
+          const val = state[feat];
+          const st = c[feat];
+          const inBox = (val >= st.min && val <= st.max);
+          const zDist = Math.abs(val - st.mean) / Math.max(st.std, 0.15);
+
+          // Tree split gain weight
+          let contrib = 0;
+          if (inBox) {
+            contrib = 1.15 - 0.35 * zDist;
+          } else {
+            const boxGap = val < st.min ? (st.min - val) / Math.max(st.std, 0.2) : (val - st.max) / Math.max(st.std, 0.2);
+            contrib = -0.65 * boxGap - 0.25 * zDist;
+          }
+
+          if (feat === "N" || feat === "P" || feat === "K") {
+            tree1Margin += contrib;
+            featureShap[feat] = contrib;
+          } else if (feat === "ph") {
+            tree2Margin += contrib * 0.85;
+            featureShap[feat] = contrib * 0.85;
+          } else {
+            if (state.scenarioMode === 3) {
+              tree3Margin += contrib * 1.15;
+              featureShap[feat] = contrib * 1.15;
+            } else {
+              featureShap[feat] = 0;
+            }
+          }
+        });
+
+        // Engineered Ratio Boost (Modes 2 & 3)
+        let ratioShap = 0;
+        if (state.scenarioMode >= 2) {
+          const targetNtoP = c.N.mean / Math.max(c.P.mean, 1);
+          const targetPtoK = c.P.mean / Math.max(c.K.mean, 1);
+          const ratioDiff = Math.abs(nToP - targetNtoP) / (targetNtoP + 0.5) + Math.abs(pToK - targetPtoK) / (targetPtoK + 0.5);
+          ratioShap = Math.max(-1.2, 0.75 - 0.85 * ratioDiff);
+          tree2Margin += ratioShap;
+        }
+        featureShap["Rasio_NPK"] = ratioShap;
+
+        const totalLogit = 0.5 + tree1Margin + tree2Margin + tree3Margin;
+        cropScores.push({
+          crop: cropKey,
+          idName: c.idName,
+          icon: c.icon,
+          logit: totalLogit,
+          tree1: tree1Margin,
+          tree2: tree2Margin,
+          tree3: tree3Margin,
+          shap: featureShap
+        });
+      });
+
+      // Sort by logit descending
+      cropScores.sort((a, b) => b.logit - a.logit);
+
+      // Softmax probability transformation
+      const maxLogit = cropScores[0].logit;
+      const tempScale = 0.85;
+      let sumExp = 0;
+      cropScores.forEach(item => {
+        item.expVal = Math.exp((item.logit - maxLogit) / tempScale);
+        sumExp += item.expVal;
+      });
+      cropScores.forEach(item => {
+        item.prob = (item.expVal / sumExp) * 100;
+      });
+
+      const top1 = cropScores[0];
+      const top2 = cropScores[1];
+
+      // Update Primary Prediction Banner
+      document.getElementById("predConfidenceBadge").textContent = `${top1.prob.toFixed(1)}%`;
+      document.getElementById("predIcon").textContent = top1.icon;
+      document.getElementById("predCropName").textContent = `${top1.crop} (${top1.idName})`;
+      document.getElementById("predLogitInfo").innerHTML = `Skor Log-Odds Margin: <span class="text-emerald-300 font-mono font-semibold">${top1.logit >= 0 ? "+" : ""}${top1.logit.toFixed(2)}</span>`;
+
+      // Dynamic agronomic explanation
+      const cTop = CROP_STATS[top1.crop];
+      let reasonText = `Kadar N=${state.N}, P=${state.P}, K=${state.K} berada di klaster optimal ${top1.crop.toUpperCase()} (N: ${cTop.N.min}–${cTop.N.max}, P: ${cTop.P.min}–${cTop.P.max}, K: ${cTop.K.min}–${cTop.K.max}). `;
+      if (state.scenarioMode < 3) {
+        reasonText += `⚠️ Mode Tanpa Iklim: AI hanya melihat tanah sehingga kandidat #2 (${top2.crop.toUpperCase()}: ${top2.prob.toFixed(1)}%) memiliki probabilitas berdekatan.`;
+      } else {
+        reasonText += `Curah hujan ${state.rainfall.toFixed(0)} mm & kelembapan ${state.humidity.toFixed(0)}% mengunci pemisahan dari ${top2.crop.toUpperCase()} (${top2.prob.toFixed(1)}%).`;
+      }
+      document.getElementById("predAgronomyReason").textContent = reasonText;
+
+      // Render Top 5 Softmax Bars
+      const top5Container = document.getElementById("top5BarsContainer");
+      top5Container.innerHTML = cropScores.slice(0, 5).map((item, idx) => {
+        const barColor = idx === 0 ? "bg-emerald-500" : idx === 1 ? "bg-sky-500" : "bg-slate-600";
+        const textColor = idx === 0 ? "text-emerald-300 font-bold" : "text-slate-300";
+        return `
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs">
+              <span class="${textColor} capitalize">${idx + 1}. ${item.icon} ${item.crop} (${item.idName})</span>
+              <span class="font-mono ${textColor}">${item.prob.toFixed(1)}% <span class="text-slate-500 text-[10px]">(z=${item.logit.toFixed(2)})</span></span>
+            </div>
+            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div class="${barColor} h-full rounded-full transition-all duration-300" style="width: ${Math.max(2, item.prob).toFixed(1)}%"></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      // Update Step-by-Step Boosting Cards
+      document.getElementById("tree1Rule").textContent = `N=${state.N}, P=${state.P}, K=${state.K}`;
+      document.getElementById("tree1Delta").innerHTML = `Kontribusi Logit: <span class="font-bold ${top1.tree1 >= 0 ? "text-emerald-400" : "text-rose-400"}">${top1.tree1 >= 0 ? "+" : ""}${top1.tree1.toFixed(2)}</span>`;
+
+      document.getElementById("tree2Rule").textContent = `pH=${state.ph.toFixed(2)} | N/P=${nToP.toFixed(2)}`;
+      document.getElementById("tree2Delta").innerHTML = `Kontribusi Logit: <span class="font-bold ${top1.tree2 >= 0 ? "text-indigo-300" : "text-rose-400"}">${top1.tree2 >= 0 ? "+" : ""}${top1.tree2.toFixed(2)}</span>`;
+
+      if (state.scenarioMode === 3) {
+        document.getElementById("tree3Rule").textContent = `Hujan=${state.rainfall.toFixed(0)}mm, Hum=${state.humidity.toFixed(0)}%`;
+        document.getElementById("tree3Delta").innerHTML = `Kontribusi Logit: <span class="font-bold ${top1.tree3 >= 0 ? "text-sky-400" : "text-rose-400"}">${top1.tree3 >= 0 ? "+" : ""}${top1.tree3.toFixed(2)}</span>`;
+      } else {
+        document.getElementById("tree3Rule").textContent = `Nonaktif (Mode Skenario ${state.scenarioMode})`;
+        document.getElementById("tree3Delta").innerHTML = `Kontribusi Logit: <span class="font-bold text-slate-500">0.00</span>`;
+      }
+
+      document.getElementById("treeTotalMargin").textContent = `z = ${top1.logit >= 0 ? "+" : ""}${top1.logit.toFixed(2)} → P = ${top1.prob.toFixed(1)}%`;
+      document.getElementById("treeRunnerUpNote").textContent = `Kandidat #2: ${top2.crop.toUpperCase()} (${top2.prob.toFixed(1)}%)`;
+
+      // Render Interactive SVG Decision Tree Path
+      renderDecisionTreeSVG(top1, top2, nToP);
+
+      // Render Local SHAP Waterfall
+      renderShapWaterfall(top1);
+    }
+
+    // =========================================================================
+    // SVG DECISION TREE PATH RENDERER
+    // =========================================================================
+    function renderDecisionTreeSVG(top1, top2, nToP) {
+      const svg = document.getElementById("xgbTreeSvg");
+
+      // Determine active branch directions based on actual soil values
+      const splitRootRight = state.K >= 100; // High Potassium fruit cluster (Apple/Grapes) vs Field crops
+      const splitL2LeftRight = state.N >= 55; // High Nitrogen (Rice/Maize/Coffee/Cotton/Banana/Watermelon) vs Legumes/Fruits
+      const splitL2RightRight = state.rainfall >= 95; // Apple vs Grapes
+
+      // Leaf highlight logic
+      let activePath = "";
+      if (!splitRootRight && !splitL2LeftRight) activePath = "LL"; // Low K, Low N (Lentil, Mungbean, Mango, Orange, Chickpea)
+      if (!splitRootRight && splitL2LeftRight) activePath = "LR";  // Low K, High N (Rice, Maize, Cotton, Coffee, Jute, Watermelon)
+      if (splitRootRight && !splitL2RightRight) activePath = "RL"; // High K, Low Rain (Grapes)
+      if (splitRootRight && splitL2RightRight) activePath = "RR";  // High K, High Rain (Apple)
+
+      // Sub-split on Level 3 for LR (High N group): Rainfall > 140 separates Rice/Jute/Coffee from Maize/Cotton/Watermelon
+      const lrRainHigh = state.rainfall >= 140;
+      const llPhAcid = state.ph < 6.4;
+
+      const cActive = "#10b981";
+      const cInactive = "#334155";
+
+      const edgeRootLeft = !splitRootRight ? cActive : cInactive;
+      const edgeRootRight = splitRootRight ? cActive : cInactive;
+
+      const edgeLL = activePath === "LL" ? cActive : cInactive;
+      const edgeLR = activePath === "LR" ? cActive : cInactive;
+      const edgeRL = activePath === "RL" ? cActive : cInactive;
+      const edgeRR = activePath === "RR" ? cActive : cInactive;
+
+      svg.innerHTML = `
+        <!-- Edges Level 1 to Level 2 -->
+        <line x1="410" y1="44" x2="215" y2="105" stroke="${edgeRootLeft}" stroke-width="${!splitRootRight ? 3.5 : 1.5}" class="tree-edge" />
+        <line x1="410" y1="44" x2="605" y2="105" stroke="${edgeRootRight}" stroke-width="${splitRootRight ? 3.5 : 1.5}" class="tree-edge" />
+
+        <!-- Edge Labels L1 -->
+        <text x="290" y="70" fill="${!splitRootRight ? '#34d399' : '#64748b'}" font-size="11" font-weight="bold">Tidak (K = ${state.K} &lt; 100)</text>
+        <text x="485" y="70" fill="${splitRootRight ? '#34d399' : '#64748b'}" font-size="11" font-weight="bold">Ya (K = ${state.K} ≥ 100)</text>
+
+        <!-- Edges Level 2 to Level 3 -->
+        <line x1="215" y1="145" x2="115" y2="210" stroke="${edgeLL}" stroke-width="${activePath === 'LL' ? 3.5 : 1.5}" class="tree-edge" />
+        <line x1="215" y1="145" x2="325" y2="210" stroke="${edgeLR}" stroke-width="${activePath === 'LR' ? 3.5 : 1.5}" class="tree-edge" />
+        <line x1="605" y1="145" x2="515" y2="210" stroke="${edgeRL}" stroke-width="${activePath === 'RL' ? 3.5 : 1.5}" class="tree-edge" />
+        <line x1="605" y1="145" x2="705" y2="210" stroke="${edgeRR}" stroke-width="${activePath === 'RR' ? 3.5 : 1.5}" class="tree-edge" />
+
+        <!-- Edge Labels L2 -->
+        <text x="115" y="178" fill="${activePath === 'LL' ? '#34d399' : '#64748b'}" font-size="10" font-weight="bold">N &lt; 55 (${state.N})</text>
+        <text x="268" y="178" fill="${activePath === 'LR' ? '#34d399' : '#64748b'}" font-size="10" font-weight="bold">N ≥ 55 (${state.N})</text>
+        <text x="495" y="178" fill="${activePath === 'RL' ? '#34d399' : '#64748b'}" font-size="10" font-weight="bold">Hujan &lt; 95</text>
+        <text x="655" y="178" fill="${activePath === 'RR' ? '#34d399' : '#64748b'}" font-size="10" font-weight="bold">Hujan ≥ 95</text>
+
+        <!-- ROOT NODE -->
+        <g class="tree-node">
+          <rect x="310" y="8" width="200" height="38" rx="10" fill="#0f172a" stroke="#10b981" stroke-width="2.5" />
+          <text x="410" y="24" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="bold">Root Split: Kalium (K) ≥ 100?</text>
+          <text x="410" y="38" text-anchor="middle" fill="#34d399" font-size="10" font-family="monospace">Input K = ${state.K} mg/kg | Gain = 412.8</text>
+        </g>
+
+        <!-- LEVEL 2 LEFT NODE: NITROGEN SPLIT -->
+        <g class="tree-node">
+          <rect x="115" y="105" width="200" height="40" rx="10" fill="#0f172a" stroke="${!splitRootRight ? '#10b981' : '#334155'}" stroke-width="${!splitRootRight ? 2.5 : 1.5}" />
+          <text x="215" y="122" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="bold">Split Tanah: Nitrogen (N) ≥ 55?</text>
+          <text x="215" y="137" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">Input N = ${state.N} | N/P = ${nToP.toFixed(2)}</text>
+        </g>
+
+        <!-- LEVEL 2 RIGHT NODE: HIGH K FRUIT SPLIT -->
+        <g class="tree-node">
+          <rect x="505" y="105" width="200" height="40" rx="10" fill="#0f172a" stroke="${splitRootRight ? '#10b981' : '#334155'}" stroke-width="${splitRootRight ? 2.5 : 1.5}" />
+          <rect x="505" y="105" width="200" height="40" rx="10" fill="none" />
+          <text x="605" y="122" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="bold">Split Klaster P&amp;K Tinggi: Hujan ≥ 95?</text>
+          <text x="605" y="137" text-anchor="middle" fill="#94a3b8" font-size="10" font-family="monospace">P = ${state.P}, Hujan = ${state.rainfall.toFixed(0)} mm</text>
+        </g>
+
+        <!-- LEAF 1 (LL): LOW N, LOW K -->
+        <g class="tree-node">
+          <rect x="20" y="210" width="185" height="50" rx="10" fill="${activePath === 'LL' ? '#064e3b' : '#0f172a'}" stroke="${activePath === 'LL' ? '#10b981' : '#334155'}" stroke-width="${activePath === 'LL' ? 2.5 : 1.5}" />
+          <text x="112" y="228" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold">Klaster Legum &amp; Hortikultura</text>
+          <text x="112" y="242" text-anchor="middle" fill="#6ee7b7" font-size="10" font-family="monospace">pH=${state.ph.toFixed(2)} (${llPhAcid ? 'Asam: Mango/Kidney' : 'Netral: Mung/Lentil'})</text>
+          <text x="112" y="254" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="bold">${activePath === 'LL' ? '▶ Aktif: ' + top1.crop.toUpperCase() : 'Leaf nonaktif'}</text>
+        </g>
+
+        <!-- LEAF 2 (LR): HIGH N, LOW/MID K -->
+        <g class="tree-node">
+          <rect x="220" y="210" width="205" height="50" rx="10" fill="${activePath === 'LR' ? '#064e3b' : '#0f172a'}" stroke="${activePath === 'LR' ? '#10b981' : '#334155'}" stroke-width="${activePath === 'LR' ? 2.5 : 1.5}" />
+          <text x="322" y="228" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold">Klaster N Tinggi (Pangan/Perkebunan)</text>
+          <text x="322" y="242" text-anchor="middle" fill="#6ee7b7" font-size="10" font-family="monospace">${lrRainHigh ? 'Hujan≥140: Rice / Jute / Coffee' : 'Hujan<140: Maize / Cotton / Melon'}</text>
+          <text x="322" y="254" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="bold">${activePath === 'LR' ? '▶ Aktif: ' + top1.crop.toUpperCase() : 'Leaf nonaktif'}</text>
+        </g>
+
+        <!-- LEAF 3 (RL): HIGH K, LOW RAIN -->
+        <g class="tree-node">
+          <rect x="440" y="210" width="165" height="50" rx="10" fill="${activePath === 'RL' ? '#064e3b' : '#0f172a'}" stroke="${activePath === 'RL' ? '#10b981' : '#334155'}" stroke-width="${activePath === 'RL' ? 2.5 : 1.5}" />
+          <text x="522" y="228" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold">Leaf: Grapes (Anggur)</text>
+          <text x="522" y="242" text-anchor="middle" fill="#6ee7b7" font-size="10" font-family="monospace">K≈200, P≈133, Hujan≈70</text>
+          <text x="522" y="254" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="bold">${activePath === 'RL' ? '▶ Aktif: ' + top1.crop.toUpperCase() : 'Leaf nonaktif'}</text>
+        </g>
+
+        <!-- LEAF 4 (RR): HIGH K, HIGH RAIN -->
+        <g class="tree-node">
+          <rect x="620" y="210" width="180" height="50" rx="10" fill="${activePath === 'RR' ? '#064e3b' : '#0f172a'}" stroke="${activePath === 'RR' ? '#10b981' : '#334155'}" stroke-width="${activePath === 'RR' ? 2.5 : 1.5}" />
+          <text x="710" y="228" text-anchor="middle" fill="#ffffff" font-size="11" font-weight="bold">Leaf: Apple (Apel)</text>
+          <text x="710" y="242" text-anchor="middle" fill="#6ee7b7" font-size="10" font-family="monospace">K≈200, P≈134, Hum≈92%</text>
+          <text x="710" y="254" text-anchor="middle" fill="#a7f3d0" font-size="10" font-weight="bold">${activePath === 'RR' ? '▶ Aktif: ' + top1.crop.toUpperCase() : 'Leaf nonaktif'}</text>
+        </g>
+      `;
+    }
+
+    // =========================================================================
+    // SHAP WATERFALL BAR CHART RENDERER
+    // =========================================================================
+    function renderShapWaterfall(top1) {
+      document.getElementById("shapTargetCropLabel").textContent = `${top1.crop} (${top1.idName})`;
+      const c = CROP_STATS[top1.crop];
+
+      const items = [
+        { key: "N", label: `Nitrogen Tanah (N = ${state.N} mg/kg)`, ideal: `Ideal ${top1.crop}: ${c.N.min}–${c.N.max} (mean ${c.N.mean})`, val: top1.shap.N },
+        { key: "P", label: `Fosfor Tanah (P = ${state.P} mg/kg)`, ideal: `Ideal ${top1.crop}: ${c.P.min}–${c.P.max} (mean ${c.P.mean})`, val: top1.shap.P },
+        { key: "K", label: `Kalium Tanah (K = ${state.K} mg/kg)`, ideal: `Ideal ${top1.crop}: ${c.K.min}–${c.K.max} (mean ${c.K.mean})`, val: top1.shap.K },
+        { key: "ph", label: `pH Tanah (pH = ${state.ph.toFixed(2)})`, ideal: `Ideal ${top1.crop}: ${c.ph.min}–${c.ph.max} (mean ${c.ph.mean})`, val: top1.shap.ph },
+        { key: "Rasio_NPK", label: `Fitur Rasio Keseimbangan NPK`, ideal: state.scenarioMode >= 2 ? "Rasio N/P & P/K Aktif" : "Nonaktif di Skenario 1", val: top1.shap.Rasio_NPK },
+        { key: "rainfall", label: `Curah Hujan (${state.rainfall.toFixed(1)} mm)`, ideal: state.scenarioMode === 3 ? `Ideal ${top1.crop}: ${c.rainfall.min}–${c.rainfall.max} mm` : "Nonaktif (Mode Tanpa Iklim)", val: top1.shap.rainfall },
+        { key: "humidity", label: `Kelembapan Udara (${state.humidity.toFixed(1)}%)`, ideal: state.scenarioMode === 3 ? `Ideal ${top1.crop}: ${c.humidity.min}–${c.humidity.max}%` : "Nonaktif (Mode Tanpa Iklim)", val: top1.shap.humidity },
+        { key: "temperature", label: `Suhu Lingkungan (${state.temperature.toFixed(1)} °C)`, ideal: state.scenarioMode === 3 ? `Ideal ${top1.crop}: ${c.temperature.min}–${c.temperature.max} °C` : "Nonaktif (Mode Tanpa Iklim)", val: top1.shap.temperature }
+      ];
+
+      items.sort((a, b) => Math.abs(b.val) - Math.abs(a.val));
+
+      const container = document.getElementById("shapWaterfallContainer");
+      container.innerHTML = items.map(item => {
+        const isPos = item.val >= 0;
+        const pct = Math.min(48, Math.abs(item.val) * 28);
+        const badgeColor = isPos ? "text-emerald-400" : "text-rose-400";
+        const barColor = isPos ? "bg-emerald-500" : "bg-rose-500";
+        return `
+          <div class="grid grid-cols-12 items-center gap-2 text-xs bg-slate-950/70 border border-slate-800/80 rounded-xl px-3 py-2">
+            <div class="col-span-5 sm:col-span-4">
+              <div class="font-semibold text-slate-200">${item.label}</div>
+              <div class="text-[10px] text-slate-400">${item.ideal}</div>
+            </div>
+            <div class="col-span-5 sm:col-span-6 relative h-3.5 bg-slate-900 rounded-full overflow-hidden flex items-center">
+              <div class="absolute left-1/2 top-0 bottom-0 w-0.5 bg-slate-600 z-10"></div>
+              ${
+                isPos
+                  ? `<div class="${barColor} h-2.5 rounded-r-full transition-all duration-300" style="margin-left: 50%; width: ${pct}%"></div>`
+                  : `<div class="${barColor} h-2.5 rounded-l-full transition-all duration-300" style="margin-left: ${(50 - pct).toFixed(1)}%; width: ${pct}%"></div>`
+              }
+            </div>
+            <div class="col-span-2 text-right font-mono font-bold ${badgeColor}">
+              ${isPos ? "+" : ""}${item.val.toFixed(2)}
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    // =========================================================================
+    // DATASET EXPLORER TABLE (TAB 3)
+    // =========================================================================
+    function renderDatasetTable() {
+      const q = (document.getElementById("searchCropInput").value || "").toLowerCase().trim();
+      const tbody = document.getElementById("datasetTableBody");
+
+      const filtered = CROP_KEYS.filter(k => {
+        const c = CROP_STATS[k];
+        return k.includes(q) || c.idName.toLowerCase().includes(q);
+      });
+
+      tbody.innerHTML = filtered.map(k => {
+        const c = CROP_STATS[k];
+        return `
+          <tr class="hover:bg-slate-800/50 transition">
+            <td class="py-2.5 px-2 font-bold text-white capitalize">${c.icon} ${k} <span class="text-slate-400 font-normal">(${c.idName})</span></td>
+            <td class="py-2.5 px-2 text-right font-mono text-emerald-300">${c.N.mean.toFixed(1)} <span class="text-[10px] text-slate-500">±${c.N.std.toFixed(0)}</span></td>
+            <td class="py-2.5 px-2 text-right font-mono text-emerald-300">${c.P.mean.toFixed(1)} <span class="text-[10px] text-slate-500">±${c.P.std.toFixed(0)}</span></td>
+            <td class="py-2.5 px-2 text-right font-mono text-emerald-300">${c.K.mean.toFixed(1)} <span class="text-[10px] text-slate-500">±${c.K.std.toFixed(0)}</span></td>
+            <td class="py-2.5 px-2 text-right font-mono text-amber-300">${c.ph.mean.toFixed(2)}</td>
+            <td class="py-2.5 px-2 text-right font-mono text-sky-300">${c.temperature.mean.toFixed(1)}</td>
+            <td class="py-2.5 px-2 text-right font-mono text-sky-300">${c.humidity.mean.toFixed(1)}</td>
+            <td class="py-2.5 px-2 text-right font-mono text-sky-300">${c.rainfall.mean.toFixed(1)}</td>
+            <td class="py-2.5 px-2 text-center">
+              <button onclick="loadCropFromTable('${k}')" class="px-2.5 py-1 rounded-lg bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border border-emerald-500/40 text-[11px] font-semibold transition">
+                Muat ke Simulator
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join("");
+    }
+  </script>
+</body>
+</html>
